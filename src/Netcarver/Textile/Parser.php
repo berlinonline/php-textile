@@ -3638,6 +3638,17 @@ class Parser
                     }
                 }
 
+                if ($balanced > 0) {
+                    // We found more end-quotes than start quotes. We can try to correct this if there are 'ambiguous' quotes
+                    // present. Ambiguous quotes are quotes that appear with spaces on each side - such that they are not
+                    // obviously a start or an end quote.
+                    $replaced = 0;
+                    $slice = preg_replace('~ +" +~'.$mod, ' '.$this->uid.'linkStartMarker:"', $slice, 1, $replaced);
+                    if ($replaced == 0) {
+                        $slice = preg_replace('~^" +~m'.$mod, $this->uid.'linkStartMarker:"', $slice, 1, $replaced);
+                    }
+                }
+                else { 
                 // Rebuild the link's text by reversing the parts and sticking them back
                 // together with quotes.
                 $link_content = implode('"', array_reverse($linkparts));
@@ -3648,6 +3659,7 @@ class Parser
 
                 // Re-assemble the link starts with a specific marker for the next regex.
                 $slice = $pre_link . $this->uid.'linkStartMarker:"' . $link_content;
+                }
             }
 
             // Add the last part back
@@ -3680,7 +3692,7 @@ class Parser
                                             # do not worry about matching class, id, lang or title yet
             ":                              # literal ": marks end of atts + text + title block
             (?P<urlx>[^'.$stopchars.']*)    # url upto a stopchar
-            /x'.$this->regex_snippets['mod'],
+            /xs'.$this->regex_snippets['mod'],
             array($this, "fLink"),
             $text
         );

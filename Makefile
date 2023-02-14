@@ -1,7 +1,7 @@
-.PHONY: all clean help lint lint-fix test test-static test-unit bump bump-dev process-reports
+.PHONY: all clean docker-build docker-images help lint lint-fix repl test test-static test-unit bump bump-dev process-reports
 
 IMAGE?=php_8_1
-PHP = docker-compose run --rm $(IMAGE)
+PHP = docker-compose run --rm php
 
 all: test
 
@@ -26,6 +26,9 @@ test-static: vendor
 test-unit: vendor
 	$(PHP) composer test:unit
 
+repl: vendor
+	$(PHP) composer repl
+
 bump: vendor
 	$(PHP) composer bump
 
@@ -34,6 +37,12 @@ bump-dev: vendor
 
 process-reports:
 	$(PHP) bash -c "test -e build/logs/clover.xml && sed -i 's/\/app\///' build/logs/clover.xml"
+
+docker-build:
+	docker-compose build php
+
+docker-images:
+	@$(PHP) bash -c "cd docker/image && ls ."
 
 help:
 	@echo "Manage project"
@@ -60,6 +69,9 @@ help:
 	@echo "  $$ make test-static"
 	@echo "  Run static tests"
 	@echo ""
+	@echo "  $$ make repl"
+	@echo "  Launch read-print-eval loop"
+	@echo ""
 	@echo "  $$ make bump"
 	@echo "  Bump version"
 	@echo ""
@@ -75,8 +87,14 @@ help:
 	@echo "  $$ make process-reports"
 	@echo "  Formats test reports to use relative local file paths"
 	@echo ""
+	@echo "  $$ make docker-images"
+	@echo "  Lists available Docker images"
+	@echo ""
+	@echo "  $$ make docker-build"
+	@echo "  Re-builds the Docker image"
+	@echo ""
 	@echo "Environment variables:"
 	@echo ""
 	@echo "  IMAGE"
-	@echo "  docker-compose service name that is used to run the command"
+	@echo "  Docker image that is used to run the command"
 	@echo ""

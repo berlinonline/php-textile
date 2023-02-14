@@ -1,13 +1,18 @@
 version: '3'
 
 services:
-  php_8_1:
-    build: ./docker/image/php/8_1
+  php:
+    build: ./docker/image/${IMAGE:-php_8_1}
     volumes:
       - .:/app
       - ${COMPOSER_HOME:-$HOME/.composer}:/tmp
     networks:
       - app
+    environment:
+      - XDEBUG_CONFIG
+      - XDEBUG_MODE
+      - XDEBUG_TRIGGER
+      - PHP_IDE_CONFIG
 
 networks:
   app:

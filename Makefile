@@ -1,7 +1,7 @@
-.PHONY: all clean docker-build docker-images help lint lint-fix repl test test-static test-unit bump bump-dev process-reports
+.PHONY: all clean docker-build docker-images help lint lint-fix repl shell test test-static test-unit bump bump-dev process-reports
 
-IMAGE?=php_8_1
-PHP = docker-compose run --rm php
+IMAGE ?= php_8_4
+PHP = docker compose run --rm php
 
 all: test
 
@@ -29,11 +29,14 @@ test-unit: vendor
 repl: vendor
 	$(PHP) composer repl
 
+shell:
+	$(PHP) bash
+
 bump: vendor
-	$(PHP) composer bump
+	$(PHP) composer project:bump
 
 bump-dev: vendor
-	$(PHP) composer bump-dev
+	$(PHP) composer project:bump-dev
 
 process-reports:
 	$(PHP) bash -c "test -e build/logs/clover.xml && sed -i 's/\/app\///' build/logs/clover.xml"
@@ -71,6 +74,9 @@ help:
 	@echo ""
 	@echo "  $$ make repl"
 	@echo "  Launch read-print-eval loop"
+	@echo ""
+	@echo "  $$ make shell"
+	@echo "  Login into the container"
 	@echo ""
 	@echo "  $$ make bump"
 	@echo "  Bump version"

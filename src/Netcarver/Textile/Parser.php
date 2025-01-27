@@ -20,7 +20,7 @@
  * Additions and fixes Copyright (c) 2010-17 Netcarver         https://github.com/netcarver
  * Additions and fixes Copyright (c) 2011    Jeff Soo          http://ipsedixit.net/
  * Additions and fixes Copyright (c) 2012    Robert Wetzlmayr  http://wetzlmayr.com/
- * Additions and fixes Copyright (c) 2012-19 Jukka Svahn       http://rahforum.biz/
+ * Additions and fixes Copyright (c) 2012-24 Jukka Svahn       https://rahforum.biz/
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -384,7 +384,7 @@ class Parser
      *
      * @var string
      */
-    protected $ver = '3.8.0';
+    protected $ver = '4.1.4-dev';
 
     /**
      * Regular expression snippets.
@@ -1972,6 +1972,9 @@ class Parser
             // Inline markup (em, strong, sup, sub, del etc).
             $text = $this->spans($text);
 
+            // Generate links.
+            $text = $this->links($text);
+
             // Glyph level substitutions (mainly typographic -- " & ' => curly quotes, -- => em-dash etc.
             $text = $this->glyphs($text);
         }
@@ -1981,7 +1984,10 @@ class Parser
         $text = $this->retrieveTags($text);
         $text = $this->retrieveURLs($text);
 
-        $text = str_replace("<br />", "<br />\n", $text);
+        // Replace shelved instances that were inside tag and link attributes.
+        $text = $this->retrieve($text);
+
+        $text = str_replace($this->getLineBreak(), $this->getLineBreak()."\n", $text);
 
         return $text;
     }
@@ -1990,12 +1996,12 @@ class Parser
      * Parses the given Textile input in un-restricted mode.
      *
      * This method is deprecated, use Parser::parse() method instead.
-     * This method is equilavent of:
+     * This method is equivalent of:
      *
      * bc. $parser = new \Netcarver\Textile\Parser();
      * echo $parser->parse('h1. Hello World!');
      *
-     * Additinal arguments can be passed with setter methods:
+     * Additional arguments can be passed with setter methods:
      *
      * bc. $parser = new \Netcarver\Textile\Parser();
      * echo $parser
@@ -2103,6 +2109,18 @@ class Parser
     {
         trigger_error('Parser::textileCommon() is deprecated.', E_USER_DEPRECATED);
         return $this->setLite($lite)->parse($text);
+    }
+
+    /**
+     * Output line break according to document type.
+     *
+     * @return string The break tag
+     * @since  4.0.0
+     * @see    Parser::getDocumentType()
+     */
+    protected function getLineBreak()
+    {
+        return ($this->getDocumentType() === self::DOCTYPE_HTML5) ? '<br>' : '<br />';
     }
 
     /**
@@ -2380,7 +2398,7 @@ class Parser
      * Cleans a HTML attribute value.
      *
      * This method checks for presence of URL encoding in the value.
-     * If the number encoded characters exceeds the thereshold,
+     * If the number encoded characters exceeds the threshold,
      * the input is discarded. Otherwise the encoded
      * instances are decoded.
      *
@@ -2424,12 +2442,12 @@ class Parser
      *
      * @param string $name The HTML element name
      * @param array<string, int|string> $atts HTML attributes applied to the tag
-     * @param bool $selfclosing Determines if the tag should be selfclosing
+     * @param bool $selfclosing Determines if the tag should be self-closing
      * @return Tag
      */
     protected function newTag($name, $atts, $selfclosing = true)
     {
-        return new Tag($name, $atts, $selfclosing);
+        return new Tag($name, $atts, $selfclosing && $this->getDocumentType() !== self::DOCTYPE_HTML5);
     }
 
     /**
@@ -2515,14 +2533,14 @@ class Parser
         }
 
         if (preg_match("/\(([^()]+)\)/U", $matched, $cls)) {
-            $class_regex = "/^([-a-zA-Z 0-9_\.\/\[\]]*)$/";
+            $class_regex = "/^([-a-zA-Z 0-9_\.\/\[\]:!]*)$/";
 
             // Consume entire class block -- valid or invalid.
             $matched = str_replace($cls[0], '', $matched);
 
             // Only allow a restricted subset of the CSS standard characters for classes/ids.
             // No encoding markers allowed.
-            if (preg_match("/\(([-a-zA-Z 0-9_\/\[\]\.\:\#]+)\)/U", $cls[0], $cls)) {
+            if (preg_match("/\(([-a-zA-Z 0-9_\/\[\].:!#]+)\)/U", $cls[0], $cls)) {
                 $hashpos = strpos($cls[1], '#');
                 // If a textile class block attribute was found with a '#' in it
                 // split it into the css class and css id...
@@ -2930,7 +2948,7 @@ class Parser
                     $def = trim($def);
 
                     if ($this->isLineWrapEnabled()) {
-                        $def = str_replace("\n", "<br />", $def);
+                        $def = str_replace("\n", $this->getLineBreak(), $def);
                     }
 
                     if ($pos === 0) {
@@ -2938,7 +2956,7 @@ class Parser
                     }
 
                     if ($this->isLineWrapEnabled()) {
-                        $term = str_replace("\n", "<br />", $term);
+                        $term = str_replace("\n", $this->getLineBreak(), $term);
                     }
 
                     $term = $this->graf($term);
@@ -3021,8 +3039,8 @@ class Parser
 
         foreach ($list as $index => $m) {
             $start = '';
-            $content = trim($m['content']);
-            $ltype = $this->liType($m['tl']);
+            $content = trim((string) $m['content']);
+            $ltype = $this->liType((string) $m['tl']);
 
             if (isset($list[$index + 1])) {
                 $next = $list[$index + 1];
@@ -3030,9 +3048,9 @@ class Parser
                 $next = false;
             }
 
-            if (strpos($m['tl'], ';') !== false) {
+            if (strpos((string) $m['tl'], ';') !== false) {
                 $litem = 'dt';
-            } elseif (strpos($m['tl'], ':') !== false) {
+            } elseif (strpos((string) $m['tl'], ':') !== false) {
                 $litem = 'dd';
             } else {
                 $litem = 'li';
@@ -3062,12 +3080,16 @@ class Parser
                 }
             }
 
-            if ($prev && $prev['tl'] && strpos($prev['tl'], ';') !== false && strpos($m['tl'], ':') !== false) {
+            if ($prev
+                && $prev['tl']
+                && strpos((string) $prev['tl'], ';') !== false
+                && strpos((string) $m['tl'], ':') !== false
+            ) {
                 $lists[$m['tl']] = 2;
             }
 
-            $tabs = str_repeat("\t", $m['level'] - 1);
-            $atts = $this->parseAttribs($m['atts']);
+            $tabs = str_repeat("\t", ((int) $m['level']) - 1);
+            $atts = $this->parseAttribs((string) $m['atts']);
 
             if (!isset($lists[$m['tl']])) {
                 $lists[$m['tl']] = 1;
@@ -3182,7 +3204,7 @@ class Parser
         // Replaces those LFs that aren't followed by white-space, or at end, with <br /> or a space.
         $m['content'] = preg_replace(
             "/\n(?![\s|])/",
-            $this->isLineWrapEnabled() ? '<br />' : ' ',
+            $this->isLineWrapEnabled() ? $this->getLineBreak() : ' ',
             (string) $m['content']
         );
 
@@ -3199,7 +3221,7 @@ class Parser
     {
         $content = preg_replace(
             "@(.+)(?<!<br>|<br />|</li>|</dd>|</dt>)\n(?![\s|])@",
-            $this->isLineWrapEnabled() ? '$1<br />' : '$1 ',
+            $this->isLineWrapEnabled() ? '$1'.$this->getLineBreak() : '$1 ',
             $m['content']
         );
 
@@ -3302,8 +3324,10 @@ class Parser
                 }
             }
 
-            $block = $this->doPBr((string) $block);
-            $block = $whitespace. str_replace('<br>', '<br />', $block);
+            $block = $whitespace . $this->doPBr((string) $block);
+            if ($this->getDocumentType() === self::DOCTYPE_XHTML) {
+                $block = str_replace('<br>', '<br />', $block);
+            }
 
             // @phpstan-ignore-next-line
             if ($ext && $anonymous_block) {
@@ -3740,7 +3764,6 @@ class Parser
                 ksort($o);
             }
 
-            // @phpstan-ignore-next-line
             $this->notes = $o;
         }
 
@@ -3935,6 +3958,7 @@ class Parser
         // If we are referencing a note that hasn't had the definition parsed yet, then assign it an ID.
 
         if (empty($this->notes[$m['label']]['id'])) {
+            // @phpstan-ignore-next-line
             $id = $this->notes[$m['label']]['id'] = $this->linkPrefix . ($this->linkIndex++);
         } else {
             $id = $this->notes[$m['label']]['id'];
@@ -3944,6 +3968,7 @@ class Parser
         $out = '<span id="noteref'.$refid.'">'.$num.'</span>';
 
         if (!$nolink) {
+            // @phpstan-ignore-next-line
             $out = '<a href="#note'.$id.'">'.$out.'</a>';
         }
 
@@ -4219,7 +4244,7 @@ class Parser
         $in = $m[0];
         $pre = $m['pre'];
         if ($this->isLineWrapEnabled()) {
-            $inner = str_replace("\n", '<br />', $m['inner']);
+            $inner = str_replace("\n", $this->getLineBreak(), $m['inner']);
         } else {
             $inner = str_replace("\n", ' ', $m['inner']);
         }
@@ -4693,6 +4718,10 @@ class Parser
         $url = $m['url'];
         $title = (isset($m['title'])) ? $m['title'] : '';
         $href = (isset($m['href'])) ? $m['href'] : '';
+
+        if ($href && !$this->isValidUrl($href)) {
+            return $m[0];
+        }
 
         $alignments = array(
             '<'    => 'left',

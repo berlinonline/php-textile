@@ -13,13 +13,13 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Changelog
         id: changelog
         run: |
           echo "contents<<CHANGELOGEOF" >> $GITHUB_OUTPUT
-          sed -e '1,/h2./d' -e '/h2./,$d' CHANGELOG.textile >> $GITHUB_OUTPUT
+          sed -e '1,/h2./d' -e '/h2./,$d' CHANGELOG.textile | sed 's/@/`/g' >> $GITHUB_OUTPUT
           echo "CHANGELOGEOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
